@@ -1,0 +1,423 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+# Simple CI/CD Pipeline using native AWS services,
+# integrated with github source code repository
+
+# Authors:  Ryan Russell
+#           Michael Hansen
+#           Billy Glenn
+
+# Version 0.40 
+# Revision Date: 8/21/2018
+
+# The Interface Metadata key provides structure for the U/I
+# as rendered in the AWS Web Console when launching a CloudFormation
+# template.  This allows grouping and ordering of parameters,
+# assigning user-friendly labels and more.
+
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label:
+          default: "GitHub Configuration"
+        Parameters:
+          - pGitHubAccount
+          - pGitHubRepo
+          - pGitHubRepoBranch
+          - pGitHubToken
+      -
+        Label:
+          default: "Pipeline Configuration"
+        Parameters:
+          - pPipelineBucketName
+          - pDynamoDbTableArn
+      -
+        Label:
+          default: "Tags"
+        Parameters:
+          - pApplicationName
+          - pEnv
+          - pCFNOwnerTag
+    
+    ParameterLabels:
+      pGitHubAccount:
+        default: "GitHub Account"
+      pGitHubRepo:
+        default: "Source Repository"
+      pGitHubRepoBranch:
+        default: "Repo Branch"
+      pGitHubToken:
+        default: "GitHub Access Token"
+      pPipelineBucketName:
+        default: "S3 Artifact Bucket Name"
+      pDynamoDbTableArn:
+        default: "DynamoDB Table ARN"
+      pApplicationName:
+        default: "Application Name"
+      pEnv:
+        default: "Environment"
+      pCFNOwnerTag:
+        default: "CorpID of Owner"
+
+
+
+# Paramaters that the user will be prompted for when running this template
+# Note that the values from these parameters will be used and referenced
+#  by the resources below
+
+Parameters:
+  # GitHub Personal Access Token for accessing the target repository
+  pGitHubToken:
+    Type: 'String'
+    Description: "Enter the GitHub Access Token"
+    NoEcho: true
+
+  # GitHub account or organization that owns the target repository
+  pGitHubAccount:
+    Type: 'String'
+    Description: "Enter the GitHub Account Name"
+
+  # Specific GitHub target repository  - do not include .git extension
+  pGitHubRepo:
+    Type: 'String'
+    Description: "Enter the GitHub Repo Name"
+
+  # Specify the branch (master, dev, feature, etc) within repo
+  pGitHubRepoBranch:
+    Type: 'String'
+    Default: 'dev'
+    Description: "Enter the Branch (dev, master, feature, etc) you wish to pull from the GitHub repo"
+
+  # Specify S3 bucket to contain pipeline / build artifacts 
+  pPipelineBucketName:
+    Type: 'String'
+    Description: "The name of the S3 bucket that will contain the pipeline artifacts"
+
+  # CorpID of the person who 'owns' the stack and associated resources
+  pCFNOwnerTag:
+    Type: 'String'
+    Description: "Enter CorpID of the owner of this stack (for tagging of resources)"
+
+  # Environment specification (appended to tags, etc)
+  pEnv:
+    Type: 'String'
+    Description: "The environment"
+    AllowedValues:
+      - 'PROD'
+      - 'QA'
+      - 'TEST'
+      - 'DEV'
+
+  # Application Name (used in stack / resource names, tags)
+  pApplicationName:
+    Type: 'String'
+    Description: "The name of the application"
+
+  # DynamoDB Table name - from Lambda101 Workshop
+  pDynamoDbTableArn:
+    Type: 'String'
+    Description: "DynamoDB Table ARN (from Lambda101 Workshop)"
+    Default: "arn:aws:dynamodb:us-east-1:123456789101:table/user-info-mehs"
+
+# The following sections define the various AWS resources,
+# and their specific configurations, created by this template
+
+Resources:
+
+# AWS IAM Role to be used with the AWS CodePipeline defined below
+# Allows CodePipeline to assume the role, perform appropriate actions
+# (logging, CodeBuild, S3, etc) on associated resources
+  rPipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-PIPELINE-ROLE-${pEnv}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal: {Service: [codepipeline.amazonaws.com]}
+          Action: ['sts:AssumeRole']
+      Policies:
+      - PolicyName: !Sub '${AWS::StackName}-PIPELINE-POLICY-${pEnv}'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'logs:CreateLogGroup'
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+                - 'logs:DescribeLogStreams'
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - 'codebuild:BatchGetBuilds'
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - 'codebuild:StartBuild'
+              Resource:
+                - !GetAtt rBuildProject.Arn
+            - Effect: Allow
+              Action:
+                - 's3:PutObject'
+                - 's3:ListObjects'
+                - 's3:GetObject'
+                - 's3:ListBucket'
+              Resource:
+                - !GetAtt rPipelineBucket.Arn
+                - !Join
+                  - ''
+                  - - !GetAtt rPipelineBucket.Arn
+                    - '/*'
+              Resource: '*'
+
+  # AWS IAM Role to be used with the AWS CodeBuild Project defined above
+  # to interact with / perform desired functions (logging, s3, lambda update)
+  rBuildProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-BUILDPROJECT-ROLE-${pEnv}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal: {Service: [codebuild.amazonaws.com]}
+          Action: ['sts:AssumeRole']
+      Policies:
+      - PolicyName: !Sub '${AWS::StackName}-BUILDPROJECT-POLICY-${pEnv}'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'logs:CreateLogGroup'
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+                - 'logs:DescribeLogStreams'
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - 's3:PutObject'
+                - 's3:ListObjects'
+                - 's3:GetObject'
+                - 's3:ListBucket'
+              Resource:
+                - !GetAtt rPipelineBucket.Arn
+                - !Join
+                  - ''
+                  - - !GetAtt rPipelineBucket.Arn
+                    - '/*'
+            - Effect: Allow
+              Action:
+                - 'lambda:UpdateFunctionCode'
+              Resource:
+                - !GetAtt rLambdaFunction.Arn
+
+  # AWS IAM Role to be used with the AWS Lambda Function defined below
+  rLambdaFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-LAMBDA-ROLE-${pEnv}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal: {Service: [lambda.amazonaws.com]}
+          Action: ['sts:AssumeRole']
+      Policies:
+      - PolicyName: !Sub '${AWS::StackName}-LAMBDA-LOGGING-POLICY-${pEnv}'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'logs:CreateLogGroup'
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+                - 'logs:DescribeLogStreams'
+              Resource: '*'
+      - PolicyName: !Sub '${AWS::StackName}-LAMBDA-DYNAMO-POLICY-${pEnv}'    
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'dynamodb:*'
+              Resource: !Ref pDynamoDbTableArn    
+
+  # AWS S3 Bucket configuration (must be globally unique and not exist)
+  # This bucket will be used to hold the pipeline artifacts (source, build)
+  rPipelineBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      # Bucket name is pulled from user-provided parameter
+      BucketName: !Ref pPipelineBucketName
+      # Tags populated with paramaters provided above
+      Tags:
+        - Key: CFNOwner
+          Value: !Ref pCFNOwnerTag
+        - Key: ENV
+          Value: !Ref pEnv
+        - Key: AppName
+          Value: !Ref pApplicationName
+
+  # AWS CodePipeline Configuration
+  rPipeline:
+    Type: "AWS::CodePipeline::Pipeline"
+    # Properties for the CodePipeline resource
+    Properties:
+      Name: !Sub '${AWS::StackName}-PIPELINE-${pEnv}'
+      RoleArn: !GetAtt rPipelineRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location:
+          Ref: rPipelineBucket
+      # Define the various Pipeline Stages and Actions
+      
+      Stages:
+      # Source Stage:  Watch GitHub, trigger pipeline on repo change
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Version: 1
+                Provider: GitHub
+              OutputArtifacts:
+                - Name: SourceOuput
+              # GitHub Repo details provided in parameters above
+              Configuration:
+                Owner: !Ref pGitHubAccount
+                Repo: !Ref pGitHubRepo
+                # Poll GitHub (every 30 seconds) for changes
+                PollForSourceChanges: 'true'
+                Branch: !Ref pGitHubRepoBranch
+                OAuthToken: !Ref pGitHubToken
+              RunOrder: 1
+      # Build Stage:  CodeBuild Action (see further below)  
+        - Name: BuildDeploy
+          Actions:
+            - Name: CodeBuild
+              InputArtifacts:
+                - Name: SourceOuput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: BuildOutput
+              Configuration:
+                ProjectName:
+                  Ref: rBuildProject
+              RunOrder: 1
+
+  # AWS CodeBuild Project definition (language, build server, buildspec)
+  rBuildProject:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Name: !Sub '${AWS::StackName}-BUILDPROJECT-${pEnv}'
+      ServiceRole: !Ref rBuildProjectRole
+      BadgeEnabled: 'false'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        PrivilegedMode: 'false'
+        # Specifying our build server container image
+        # TODO:  Parameterize this for 'selectable' pipeline
+        Image: aws/codebuild/java:openjdk-8
+      Source:
+        Type: CODEPIPELINE
+        
+        # Here's the BuildSpec that will be applied via CodeBuild
+        # TODO:  Externalize this to look for buildspec.yml in repo
+        BuildSpec: !Sub |
+          version: 0.2
+          phases:
+            build:
+              commands:
+                - echo Build started on `date`
+                - ls -la
+                - cd aws-app
+                - mvn package
+                - aws s3 cp target/lambda-java-example-1.0-SNAPSHOT.jar s3://mehs-lambda-deploy-east
+                - aws lambda update-function-code --function-name ${rLambdaFunction} --s3-bucket mehs-lambda-deploy-east --s3-key lambda-java-example-1.0-SNAPSHOT.jar --publish
+            post_build:
+              commands:
+                - echo Build completed on `date`
+      TimeoutInMinutes: 10
+      Cache:
+        Type: NO_CACHE
+      # Tag all the things (from parameter values)
+      Tags:
+        - Key: CFNOwner
+          Value: !Ref pCFNOwnerTag
+        - Key: ENV
+          Value: !Ref pEnv
+        - Key: AppName
+          Value: !Ref pApplicationName
+
+
+
+  # AWS Lambda Configuration
+  # This is the 'target' of our deployment step (final step of buildspec)
+  
+  # **** TODO: We need a param for the class name in the Handler
+
+  rLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-LAMBDA-${pEnv}'
+      Timeout: 10
+      Runtime: java8
+      Handler: com.amazonaws.lambda.demo.Hello::handleRequest
+      Role: !GetAtt rLambdaFunctionRole.Arn
+      Environment:
+        Variables:
+          ENV: !Ref pEnv
+          FunctionName: !Sub '${AWS::StackName}-LAMBDA-${pEnv}'
+      # Tag all the things (from parameter values)
+      Tags:
+        - Key: CFNOwner
+          Value: !Ref pCFNOwnerTag
+        - Key: ENV
+          Value: !Ref pEnv
+        - Key: AppName
+          Value: !Ref pApplicationName
+      Code:
+        S3Bucket: "mehs-lambda-deploy-east"
+        S3Key: "lambda-java-example-1.0-SNAPSHOT.jar"
+        
+        # Things we changed
+        # Line 333 changed to aws/codebuild/java:openjdk-8 which has Java8 and Maven
+        # Line 339-352 - Changed the build spec
+        # changed line 393-394 - Total hack using an S3 bucket but not sure what else to do
+        
+        
+        
+        # Build Spec changes to not use S3: Line 348 and 349 can probably be replace by: 
+        # aws lambda update-function-code --function-name ${rLambdaFunction} --zip-file fileb://./target/lambda-java-example-1.0-SNAPSHOT.jar
+        
+        # Build spec reference: how can we prompt for the name of the file?  or, can maven create a consistantly named jar file
+        # Maybe something like this:
+        # <packaging>jar</packaging>
+        # <build>
+        #   <finalName>pipeline-output.jar</finalName>
+        # </build>
+        
+        # Build Spec: Let's pull the build spec out in to a buildpec.yml file 
+        
+        # Initial code: Line 392-394 create an odd dependancy.  How can we solve that?  Do we create a bucket on the fly and put a hello world jar file in it?
+        
+        # Maybe leave for the workshop????: can/should we remove 117-121???
+        
+       
+        
+        
+        
+        
