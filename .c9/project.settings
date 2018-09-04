@@ -8,6 +8,7 @@
         "@automaticShutdown": "30"
     },
     "javascript": {
+        "@formatOnSave": true,
         "@use_jsbeautify": true
     },
     "language": {
@@ -24,6 +25,9 @@
                 }
             }
         }
+    },
+    "php": {
+        "@formatOnSave": true
     },
     "run": {
         "configs": {
