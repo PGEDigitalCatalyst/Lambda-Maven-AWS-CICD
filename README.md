@@ -1,15 +1,13 @@
-         ___        ______     ____ _                 _  ___  
-        / \ \      / / ___|   / ___| | ___  _   _  __| |/ _ \ 
-       / _ \ \ /\ / /\___ \  | |   | |/ _ \| | | |/ _` | (_) |
-      / ___ \ V  V /  ___) | | |___| | (_) | |_| | (_| |\__, |
-     /_/   \_\_/\_/  |____/   \____|_|\___/ \__,_|\__,_|  /_/ 
- ----------------------------------------------------------------- 
+# Demo: Lambda CI/CD Pipeline for Java8 & Maven
+
+## Overview
+
+Fill me out...
 
 
-Hi there! Welcome to AWS Cloud9!
 
-To get started, create some files, play with the terminal,
-or visit https://docs.aws.amazon.com/console/cloud9/ for our documentation.
+## Getting Started
+Clicking the button below will launch a CloudFormation template.  Before you click this button, please make sure to open 
+a seperate browser tab and log in to the AWS account and region that you would like to deploy the CloudFormation template.
 
-Happy coding!
-
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?templateURL=https://s3.amazonaws.com/mehs-lambda-deploy-east/lambda-java-maven-cfn.yml)
