@@ -1,0 +1,12 @@
+version: 0.2
+    phases:
+        build:
+            commands:
+                - echo Build started on `date`
+                - ls -la
+                - cd aws-app
+                - mvn package
+                - aws lambda update-function-code --function-name ${rLambdaFunction} --zip-file fileb://./target/lambda-java-example-1.0-SNAPSHOT.jar
+        post_build:
+            commands:
+                - echo Build completed on `date`
