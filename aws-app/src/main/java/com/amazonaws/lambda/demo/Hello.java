@@ -9,7 +9,7 @@ public class Hello implements RequestHandler<Object, String> {
     public String handleRequest(Object input, Context context) {
         context.getLogger().log("Input: " + input);
 
-        String output = "Hello " + input + "!";
+        String output = "Hello Michael: " + input + "!";
         return output;
     }
 
