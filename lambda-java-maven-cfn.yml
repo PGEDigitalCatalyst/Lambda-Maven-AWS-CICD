@@ -345,8 +345,7 @@ Resources:
                 - ls -la
                 - cd aws-app
                 - mvn package
-                - aws s3 cp target/lambda-java-example-1.0-SNAPSHOT.jar s3://mehs-lambda-deploy-east
-                - aws lambda update-function-code --function-name ${rLambdaFunction} --s3-bucket mehs-lambda-deploy-east --s3-key lambda-java-example-1.0-SNAPSHOT.jar --publish
+                - aws lambda update-function-code --function-name ${rLambdaFunction} --zip-file fileb://./target/lambda-java-example-1.0-SNAPSHOT.jar
             post_build:
               commands:
                 - echo Build completed on `date`
@@ -397,24 +396,12 @@ Resources:
         # Line 333 changed to aws/codebuild/java:openjdk-8 which has Java8 and Maven
         # Line 339-352 - Changed the build spec
         # changed line 393-394 - Total hack using an S3 bucket but not sure what else to do
-        
-        
-        
-        # Build Spec changes to not use S3: Line 348 and 349 can probably be replace by: 
-        # aws lambda update-function-code --function-name ${rLambdaFunction} --zip-file fileb://./target/lambda-java-example-1.0-SNAPSHOT.jar
-        
-        # Build spec reference: how can we prompt for the name of the file?  or, can maven create a consistantly named jar file
-        # Maybe something like this:
-        # <packaging>jar</packaging>
-        # <build>
-        #   <finalName>pipeline-output.jar</finalName>
-        # </build>
-        
+        # changed handler on line 378 class::function name (note: this is not the filename like in nodejs)
+      
         # Build Spec: Let's pull the build spec out in to a buildpec.yml file 
         
         # Initial code: Line 392-394 create an odd dependancy.  How can we solve that?  Do we create a bucket on the fly and put a hello world jar file in it?
-        
-        # Maybe leave for the workshop????: can/should we remove 117-121???
+
         
        
         
