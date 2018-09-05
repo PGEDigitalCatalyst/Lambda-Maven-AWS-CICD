@@ -336,19 +336,19 @@ Resources:
         
         # Here's the BuildSpec that will be applied via CodeBuild
         # TODO:  Externalize this to look for buildspec.yml in repo
-        # BuildSpec: !Sub |
-        #   version: 0.2
-        #   phases:
-        #     build:
-        #       commands:
-        #         - echo Build started on `date`
-        #         - ls -la
-        #         - cd aws-app
-        #         - mvn package
-        #         - aws lambda update-function-code --function-name ${rLambdaFunction} --zip-file fileb://./target/lambda-java-example-1.0-SNAPSHOT.jar
-        #     post_build:
-        #       commands:
-        #         - echo Build completed on `date`
+        BuildSpec: !Sub |
+          version: 0.2
+          phases:
+            build:
+              commands:
+                - echo Build started on `date`
+                - ls -la
+                - cd aws-app
+                - mvn package
+                - aws lambda update-function-code --function-name ${rLambdaFunction} --zip-file fileb://./target/lambda-java-example-1.0-SNAPSHOT.jar
+            post_build:
+              commands:
+                - echo Build completed on `date`
       TimeoutInMinutes: 10
       Cache:
         Type: NO_CACHE
