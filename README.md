@@ -1,15 +1,21 @@
-         ___        ______     ____ _                 _  ___  
-        / \ \      / / ___|   / ___| | ___  _   _  __| |/ _ \ 
-       / _ \ \ /\ / /\___ \  | |   | |/ _ \| | | |/ _` | (_) |
-      / ___ \ V  V /  ___) | | |___| | (_) | |_| | (_| |\__, |
-     /_/   \_\_/\_/  |____/   \____|_|\___/ \__,_|\__,_|  /_/ 
- ----------------------------------------------------------------- 
+# Lambda CI/CD Pipeline for Java8 & Maven
 
+## Overview
 
-Hi there! Welcome to AWS Cloud9!
+This repository is a simple demonstration of using a CloudFormation template to automate
+the deployment of a Java8 function stored in Github from GitHub to Lambda using
+AWS CodePipeline and AWS CodeBuild.  In addition to the CodeBuild and CodePipeline 
+resources, the CloudFormation template will setup three roles, and S3 bucket for 
+artifacts, and a Lambda function.  If the associated branch in Github has a change,
+the pipeline will automatically run again and will update the Lambda function.
 
-To get started, create some files, play with the terminal,
-or visit https://docs.aws.amazon.com/console/cloud9/ for our documentation.
+![alt text](./Workshop-Lambda-CICD.png "Diagram")
 
-Happy coding!
+## Getting Started
+Clicking the button below will launch a CloudFormation template.  Before you click 
+this button, please make sure to open a seperate browser tab and log in to the 
+AWS account and region that you would like to deploy the CloudFormation template.
 
+Please be in US-EAST-1 region for this demonstration.
+
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?templateURL=https://s3.amazonaws.com/mehs-lambda-deploy-east/lambda-java-maven-cfn.yml)
